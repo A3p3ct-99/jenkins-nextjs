@@ -4,7 +4,7 @@ podTemplate(
         containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
         containerTemplate(
             name: 'kubectl', 
-            image: 'alpine/k8s:1.24.0', 
+            image: 'alpine/k8s:1.34.0', 
             command: 'cat',
             ttyEnabled: true
         ),
