@@ -1,5 +1,5 @@
 podTemplate(
-    label: 'jenkins-agent',
+    label: 'k8s-agent',
     containers: [
         containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
         containerTemplate(
@@ -23,13 +23,12 @@ podTemplate(
     ]
 ) {
 
-    node('jenkins-agent') {
+    node('k8s-agent') {
 
         def imageTag = "${BUILD_NUMBER}"
         def imageName = "a3p3ct/nextjs"
         def fullImageName = "${imageName}:${imageTag}"
         def k8sNamespace = "default"
-        def controlPlaneIP = "188.166.179.191"
         
 
         stage('Clone Project') {
@@ -54,31 +53,13 @@ podTemplate(
             }
         }
 
-        stage('Get Deployment File from Control Plane') {
-            container('kubectl') {
-                withCredentials([sshUserPrivateKey(credentialsId: 'control-plane-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    sh """
-                    # Install required packages
-                    apk add --no-cache openssh-client kubectl
-
-                    # Copy file from control plane via SSH
-                    scp -i \$SSH_KEY -o StrictHostKeyChecking=no \$SSH_USER@${controlPlaneIP}:/home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
-                    
-                    # Verify the file
-                    cat ./nextjs-deploy-temp.yaml
-                    """
-                }
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             container('kubectl') {
                 sh """
                 # Apply deployment
-                kubectl apply -f ./nextjs-deploy-temp.yaml -n ${k8sNamespace}
-                
-                # Wait for rollout to complete
-                kubectl rollout status deployment/nextjs-app -n ${k8sNamespace} --timeout=300s
+                kubectl set image deployment/frontend frontend=${fullImageName} -n default
+
+                kubectl rollout status deployment/frontend -n default
                 
                 # Get deployment status
                 kubectl get pods -l app=frontend -n ${k8sNamespace}
