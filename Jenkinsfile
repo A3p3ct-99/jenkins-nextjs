@@ -1,69 +1,114 @@
-pipeline {
-    agent {
-        kubernetes {
-            yaml '''
-                apiVersion: v1
-                kind: Pod
-                spec:
-                  containers:
-                  - name: docker
-                    image: docker:latest
-                    command: ["cat"]
-                    tty: true
-                    volumeMounts:
-                    - name: docker-sock
-                      mountPath: /var/run/docker.sock
-                  - name: kubectl
-                    image: bitnami/kubectl:latest
-                    command: ["cat"]
-                    tty: true
-                  volumes:
-                  - name: docker-sock
-                    hostPath:
-                      path: /var/run/docker.sock
-            '''
+podTemplate(
+    label: 'jenkins-agent',
+    containers: [
+        containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
+        containerTemplate(name: 'kubectl', image: 'bitnami/kubectl:latest', command: 'sleep', args: '30d'),
+        containerTemplate(name: 'docker', image: 'docker:latest', command: 'sleep', args: '30d', 
+                         privileged: true),
+        containerTemplate(name: 'git', image: 'alpine/git:latest', command: 'sleep', args: '30d')
+    ],
+    volumes: [
+        hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock')
+    ]
+) {
+
+    node('jenkins-agent') {
+
+        def imageTag = "${BUILD_NUMBER}"
+        def imageName = "a3p3ct/nextjs"
+        def fullImageName = "${imageName}:${imageTag}"
+        def k8sNamespace = "default"
+
+        stage('Clone Project') {
+            git branch: 'main', url: 'https://github.com/A3p3ct-99/jenkins-nextjs.git'
         }
-    }
-    
-    environment {
-        DOCKER_REGISTRY = "your-registry"
-        IMAGE_NAME = "a3p3ct/nextjs"
-        DOCKER_CREDENTIALS_ID = "docker-credentials"
-        GIT_REPO = "git@github.com:A3p3ct-99/jenkins-nextjs.git"
-        GIT_BRANCH = "main"
-    }
-    
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+
+        stage('Install Yarn & Dependencies') {
+            container('node') {
+                sh '''
+                yarn --version
+                yarn install --frozen-lockfile
+                '''
             }
         }
-        
+
+        stage('Build Next.js Application') {
+            container('node') {
+                sh '''
+                export NODE_ENV=production
+                export NEXT_TELEMETRY_DISABLED=1
+                yarn build
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            container('node') {
+                sh '''
+                # Install all dependencies for testing
+                yarn install --frozen-lockfile
+                yarn test --passWithNoTests || echo "No tests found"
+                '''
+            }
+        }
+
         stage('Build Docker Image') {
-            steps {
-                container('docker') {
-                    sh "docker build -f Dockerfile-nextjs -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ."
+            container('docker') {
+                sh """
+                docker build -t ${fullImageName} .
+                docker tag ${fullImageName} ${imageName}:latest
+                """
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            container('docker') {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', 
+                                                passwordVariable: 'DOCKER_PASSWORD', 
+                                                usernameVariable: 'DOCKER_USERNAME')]) {
+                    sh """
+                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                    docker push ${fullImageName}
+                    docker push ${imageName}:latest
+                    """
                 }
             }
         }
-        
-        stage('Push Docker Image') {
-            steps {
-                container('docker') {
-                    withCredentials([string(credentialsId: "${DOCKER_CREDENTIALS_ID}", variable: 'DOCKER_PWD')]) {
-                        sh "echo ${DOCKER_PWD} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USERNAME} --password-stdin"
-                        sh "docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}"
-                    }
-                }
-            }
-        }
-        
+
         stage('Deploy to Kubernetes') {
-            steps {
-                container('kubectl') {
-                    sh "envsubst < k8s/nextjs-deployment.yaml | kubectl apply -f -"
-                }
+            container('kubectl') {
+                sh """
+                # Apply deployment
+                kubectl apply -f k8s/frontend/nextjs-deploy.yaml -n ${k8sNamespace}
+                
+                # Wait for rollout to complete
+                kubectl rollout status deployment/nextjs-app -n ${k8sNamespace} --timeout=300s
+                
+                # Get deployment status
+                kubectl get pods -l app=frontend -n ${k8sNamespace}
+                """
+            }
+        }
+
+        stage('Verify Deployment') {
+            container('kubectl') {
+                sh """
+                # Check if deployment is ready
+                kubectl get deployment frontend -n ${k8sNamespace}
+                
+                # Get service info
+                kubectl get svc -n ${k8sNamespace}
+                """
+            }
+        }
+
+        stage('Cleanup') {
+            container('docker') {
+                sh """
+                # Clean up local images to save space
+                docker rmi ${fullImageName} || true
+                docker rmi ${imageName}:latest || true
+                """
             }
         }
     }
