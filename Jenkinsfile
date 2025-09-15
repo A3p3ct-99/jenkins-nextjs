@@ -1,3 +1,9 @@
+properties([
+    pipelineTriggers([
+        pollSCM('H/2 * * * *') // Poll every 2 minutes
+    ])
+])
+
 podTemplate(
     label: 'jenkins-agent',
     containers: [
