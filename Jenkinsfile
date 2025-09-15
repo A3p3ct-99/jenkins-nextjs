@@ -1,3 +1,9 @@
+properties([
+    pipelineTriggers([
+        pollSCM('H/2 * * * *') // Poll every 2 minutes
+    ])
+])
+
 podTemplate(
     label: 'jenkins-agent',
     containers: [
@@ -18,6 +24,7 @@ podTemplate(
         def imageName = "a3p3ct/nextjs"
         def fullImageName = "${imageName}:${imageTag}"
         def k8sNamespace = "default"
+        
 
         stage('Clone Project') {
             git branch: 'main', url: 'https://github.com/A3p3ct-99/jenkins-nextjs.git'
