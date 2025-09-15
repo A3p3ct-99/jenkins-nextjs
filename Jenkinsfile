@@ -10,9 +10,6 @@ podTemplate(
             args: '30d'
         ),
         containerTemplate(name: 'git', image: 'alpine/git:latest', command: 'sleep', args: '30d')
-    ],
-    volumes: [
-        hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock')
     ]
 ) {
 
