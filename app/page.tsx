@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Trash2, Edit, Plus, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 
 interface User {
   id: number;
@@ -38,11 +39,12 @@ interface User {
   age: number;
 }
 
-// Configuration for your Spring Boot API
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
-
 export default function UserManagement() {
+  const {
+    config,
+    loading: configLoading,
+    error: configError,
+  } = useRuntimeConfig();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -54,24 +56,34 @@ export default function UserManagement() {
 
   // Fetch users on component mount
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (config?.NEXT_PUBLIC_API_URL) {
+      fetchUsers();
+    }
+  }, [config]);
 
   const fetchUsers = async () => {
+    if (!config?.NEXT_PUBLIC_API_URL) {
+      toast({
+        title: "Error",
+        description: "API URL configuration is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/users`);
+      const response = await fetch(`${config.NEXT_PUBLIC_API_URL}/users`);
       if (response.ok) {
         const data = await response.json();
-        setUsers(data?.payload);
+        setUsers(data?.payload || data);
       } else {
         throw new Error("Failed to fetch users");
       }
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          "Failed to fetch users. Make sure your Spring Boot API is running.",
+        description: "Failed to fetch users. Make sure your API is running.",
         variant: "destructive",
       });
     } finally {
@@ -253,8 +265,37 @@ export default function UserManagement() {
   //   user.name.toLowerCase().includes(searchTerm.toLowerCase())
   // )
 
-  console.log("API_BASE_URL ", API_BASE_URL);
+  console.log("API_BASE_URL ", config?.NEXT_PUBLIC_API_URL);
   console.log("users ", users);
+
+  // Show loading state while config is loading
+  if (configLoading) {
+    return (
+      <div className="container mx-auto p-6 max-w-6xl">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center py-4">Loading configuration...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if config failed to load
+  if (configError) {
+    return (
+      <div className="container mx-auto p-6 max-w-6xl">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center py-4 text-red-500">
+              Error loading configuration. Please check your environment
+              variables.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
@@ -262,8 +303,11 @@ export default function UserManagement() {
         <CardHeader>
           <CardTitle className="text-2xl font-bold">User Management</CardTitle>
           <CardDescription>
-            Manage users with CRUD operations and search functionality (Spring
-            Boot Backend)
+            Manage users with CRUD operations and search functionality
+            <br />
+            <small>
+              API URL: {config?.NEXT_PUBLIC_API_URL || "Not configured"}
+            </small>
           </CardDescription>
         </CardHeader>
         <CardContent>
