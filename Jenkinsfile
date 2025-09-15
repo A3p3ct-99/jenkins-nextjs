@@ -29,7 +29,7 @@ podTemplate(
         def imageName = "a3p3ct/nextjs"
         def fullImageName = "${imageName}:${imageTag}"
         def k8sNamespace = "default"
-        def controlPlaneIP = "control-plane-ssh"
+        def controlPlaneIP = "188.166.179.191"
         
 
         stage('Clone Project') {
