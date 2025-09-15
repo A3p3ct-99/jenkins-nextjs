@@ -29,24 +29,11 @@ podTemplate(
         def imageName = "a3p3ct/nextjs"
         def fullImageName = "${imageName}:${imageTag}"
         def k8sNamespace = "default"
+        def controlPlaneIP = "control-plane-ssh"
         
 
         stage('Clone Project') {
             git branch: 'main', url: 'https://github.com/A3p3ct-99/jenkins-nextjs.git'
-        }
-
-        stage('Get Deployment File from Control Plane') {
-            container('kubectl') {
-                withCredentials([sshUserPrivateKey(credentialsId: 'control-plane-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    sh """
-                    # Copy file from control plane via SSH
-                    scp -i \$SSH_KEY -o StrictHostKeyChecking=no \$SSH_USER@CONTROL_PLANE_IP:/home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
-                    
-                    # Update image tag
-                    sed -i 's|image: a3p3ct/nextjs:.*|image: ${fullImageName}|g' ./nextjs-deploy-temp.yaml
-                    """
-                }
-            }
         }
 
         stage('Build & Push Docker Image') {
@@ -62,6 +49,23 @@ podTemplate(
                         --context=. \\
                         --destination=${fullImageName} \\
                         --destination=${imageName}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Get Deployment File from Control Plane') {
+            container('kubectl') {
+                withCredentials([sshUserPrivateKey(credentialsId: 'control-plane-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh """
+                    # Install required packages
+                    apk add --no-cache openssh-client kubectl
+
+                    # Copy file from control plane via SSH
+                    scp -i \$SSH_KEY -o StrictHostKeyChecking=no \$SSH_USER@CONTROL_PLANE_IP:/home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
+                    
+                    # Verify the file
+                    cat ./nextjs-deploy-temp.yaml
                     """
                 }
             }
