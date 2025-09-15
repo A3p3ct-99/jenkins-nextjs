@@ -2,14 +2,24 @@ podTemplate(
     label: 'jenkins-agent',
     containers: [
         containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
-        containerTemplate(name: 'kubectl', image: 'bitnami/kubectl:latest', command: 'sleep', args: '30d'),
+        containerTemplate(
+            name: 'kubectl', 
+            image: 'alpine/k8s:1.24.0', 
+            command: 'cat',
+            ttyEnabled: true
+        ),
         containerTemplate(
             name: 'kaniko', 
             image: 'gcr.io/kaniko-project/executor:debug', 
             command: 'sleep', 
-            args: '30d'
+            args: '99999'
         ),
-        containerTemplate(name: 'git', image: 'alpine/git:latest', command: 'sleep', args: '30d')
+        containerTemplate(
+            name: 'git', 
+            image: 'alpine/git:latest', 
+            command: 'cat',
+            ttyEnabled: true
+        )
     ]
 ) {
 
