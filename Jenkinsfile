@@ -5,7 +5,7 @@ podTemplate(
         containerTemplate(name: 'kubectl', image: 'bitnami/kubectl:latest', command: 'sleep', args: '30d'),
         containerTemplate(
             name: 'kaniko', 
-            image: 'gcr.io/kaniko-project/executor:debug', 
+            image: 'bitnami/kaniko:latest', 
             command: 'sleep', 
             args: '30d'
         ),
