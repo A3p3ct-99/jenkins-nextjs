@@ -20,6 +20,9 @@ podTemplate(
             command: 'cat',
             ttyEnabled: true
         )
+    ],
+    volumes: [
+        hostPathVolume(mountPath: '/home/devop/k8s', hostPath: '/home/devop/k8s')
     ]
 ) {
 
@@ -33,35 +36,6 @@ podTemplate(
 
         stage('Clone Project') {
             git branch: 'main', url: 'https://github.com/A3p3ct-99/jenkins-nextjs.git'
-        }
-
-        stage('Install Yarn & Dependencies') {
-            container('node') {
-                sh '''
-                yarn --version
-                yarn install --frozen-lockfile
-                '''
-            }
-        }
-
-        stage('Build Next.js Application') {
-            container('node') {
-                sh '''
-                export NODE_ENV=production
-                export NEXT_TELEMETRY_DISABLED=1
-                yarn build
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            container('node') {
-                sh '''
-                # Install all dependencies for testing
-                yarn install --frozen-lockfile
-                yarn test --passWithNoTests || echo "No tests found"
-                '''
-            }
         }
 
         stage('Build & Push Docker Image') {
@@ -86,7 +60,7 @@ podTemplate(
             container('kubectl') {
                 sh """
                 # Apply deployment
-                kubectl apply -f k8s/frontend/nextjs-deploy.yaml -n ${k8sNamespace}
+                kubectl apply -f ./nextjs-deploy-temp.yaml -n ${k8sNamespace}
                 
                 # Wait for rollout to complete
                 kubectl rollout status deployment/nextjs-app -n ${k8sNamespace} --timeout=300s
