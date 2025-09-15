@@ -3,8 +3,12 @@ podTemplate(
     containers: [
         containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
         containerTemplate(name: 'kubectl', image: 'bitnami/kubectl:latest', command: 'sleep', args: '30d'),
-        containerTemplate(name: 'docker', image: 'docker:latest', command: 'sleep', args: '30d', 
-                         privileged: true),
+        containerTemplate(
+            name: 'kaniko', 
+            image: 'gcr.io/kaniko-project/executor:debug', 
+            command: 'sleep', 
+            args: '30d'
+        ),
         containerTemplate(name: 'git', image: 'alpine/git:latest', command: 'sleep', args: '30d')
     ],
     volumes: [
@@ -53,24 +57,19 @@ podTemplate(
             }
         }
 
-        stage('Build Docker Image') {
-            container('docker') {
-                sh """
-                docker build -t ${fullImageName} .
-                docker tag ${fullImageName} ${imageName}:latest
-                """
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            container('docker') {
+        stage('Build & Push Docker Image') {
+            container('kaniko') {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', 
                                                 passwordVariable: 'DOCKER_PASSWORD', 
                                                 usernameVariable: 'DOCKER_USERNAME')]) {
                     sh """
-                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                    docker push ${fullImageName}
-                    docker push ${imageName}:latest
+                    echo '{"auths":{"https://index.docker.io/v1/":{"username":"'"\$DOCKER_USERNAME"'","password":"'"\$DOCKER_PASSWORD"'"}}}' > /kaniko/.docker/config.json
+                    
+                    /kaniko/executor \\
+                        --dockerfile=./Dockerfile \\
+                        --context=. \\
+                        --destination=${fullImageName} \\
+                        --destination=${imageName}:latest
                     """
                 }
             }
@@ -99,16 +98,6 @@ podTemplate(
                 
                 # Get service info
                 kubectl get svc -n ${k8sNamespace}
-                """
-            }
-        }
-
-        stage('Cleanup') {
-            container('docker') {
-                sh """
-                # Clean up local images to save space
-                docker rmi ${fullImageName} || true
-                docker rmi ${imageName}:latest || true
                 """
             }
         }
