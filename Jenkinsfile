@@ -1,5 +1,6 @@
 podTemplate(
     label: 'jenkins-agent',
+    nodeSelector: 'node-role.kubernetes.io/control-plane=',
     containers: [
         containerTemplate(name: 'node', image: 'node:20-bullseye-slim', command: 'sleep', args: '30d'),
         containerTemplate(
@@ -38,6 +39,31 @@ podTemplate(
             git branch: 'main', url: 'https://github.com/A3p3ct-99/jenkins-nextjs.git'
         }
 
+        stage('Deploy to Kubernetes') {
+            container('kubectl') {
+                sh """
+                # Copy and modify the deployment file
+                cp /home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
+                
+                # Update the image tag
+                sed -i 's|image: a3p3ct/nextjs:.*|image: ${fullImageName}|g' ./nextjs-deploy-temp.yaml
+                
+                # Verify the file exists
+                ls -la ./nextjs-deploy-temp.yaml
+                cat ./nextjs-deploy-temp.yaml
+                
+                # Apply deployment
+                kubectl apply -f ./nextjs-deploy-temp.yaml -n ${k8sNamespace}
+                
+                # Wait for rollout
+                kubectl rollout status deployment/nextjs-app -n ${k8sNamespace} --timeout=300s
+                
+                # Get status
+                kubectl get pods -l app=frontend -n ${k8sNamespace}
+                """
+            }
+        }
+
         stage('Build & Push Docker Image') {
             container('kaniko') {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', 
@@ -67,18 +93,6 @@ podTemplate(
                 
                 # Get deployment status
                 kubectl get pods -l app=frontend -n ${k8sNamespace}
-                """
-            }
-        }
-
-        stage('Verify Deployment') {
-            container('kubectl') {
-                sh """
-                # Check if deployment is ready
-                kubectl get deployment frontend -n ${k8sNamespace}
-                
-                # Get service info
-                kubectl get svc -n ${k8sNamespace}
                 """
             }
         }
