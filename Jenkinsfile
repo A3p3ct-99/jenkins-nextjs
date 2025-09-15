@@ -62,7 +62,7 @@ podTemplate(
                     apk add --no-cache openssh-client kubectl
 
                     # Copy file from control plane via SSH
-                    scp -i \$SSH_KEY -o StrictHostKeyChecking=no \$SSH_USER@CONTROL_PLANE_IP:/home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
+                    scp -i \$SSH_KEY -o StrictHostKeyChecking=no \$SSH_USER@${controlPlaneIP}:/home/devop/k8s/frontend/nextjs-deploy.yaml ./nextjs-deploy-temp.yaml
                     
                     # Verify the file
                     cat ./nextjs-deploy-temp.yaml
